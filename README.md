@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img height="120" src="https://github.com/lainbo/ai-commit/blob/main/images/logo.png?raw=true">
+<img height="120" src="https://github.com/slowlyo/ai-commit/blob/main/images/logo.png?raw=true">
 
 <h1>AI Commit</h1>
 
@@ -24,12 +24,10 @@
 
 ---
 
-**本项目 Fork 自 [sitoi/ai-commit](https://github.com/sitoi/ai-commit)，并新增以下功能：**
+**本项目 Fork 自 [lainbo/ai-commit](https://github.com/lainbo/ai-commit)，并新增以下功能：**
 
-- ✅ 即使没有暂存变更也允许生成提交信息（默认：优先使用暂存区 diff；若为空则回退到未暂存 diff）
-- ✅ 新增配置 `ai-commit.DIFF_SOURCE` 用于控制生成时使用哪些改动（`auto` / `staged` / `unstaged` / `staged+unstaged`）
-- ✅ 新增配置 `ai-commit.SCM_INPUT_BEHAVIOR` 用于控制是否将源代码管理输入框内容作为 AI 上下文发送（`context` / `ignore`）
-- ✅ 新增配置 `ai-commit.REFERENCE_GIT_LOG`，可把最近的 `git log --oneline` 提交历史作为模型参考上下文
+- ✅ 更改 AI 来源为 OpenAI (兼容) 应用程序接口
+- ✅ 支持通过 `ai-commit.OPENAI_EXTRA_BODY` 自定义 Chat Completions 请求体参数
 
 ## 📦 安装
 
