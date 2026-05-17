@@ -1,8 +1,8 @@
 {
-  "name": "nota-ai-commit-lainbo",
-  "displayName": "AI Commit",
+  "name": "slowlyo-ai-commit",
+  "displayName": "Commit Message AI",
   "description": "使用 OpenAI (兼容) 应用程序接口审核代码版本管理变更内容，生成符合规范的标准化提交信息，简化提交流程，统一代码提交规范。",
-  "version": "0.1.17",
+  "version": "0.1.0",
   "engines": {
     "node": ">=16",
     "vscode": "^1.77.0"
@@ -22,13 +22,10 @@
     "AI Commit",
     "Auto Commit"
   ],
-  "publisher": "lainbo",
-  "repository": "https://github.com/lainbo/ai-commit",
+  "publisher": "slowlyo",
+  "repository": "https://github.com/slowlyo/ai-commit",
   "icon": "images/logo.png",
-  "activationEvents": [
-    "onCommand:extension.ai-commit",
-    "onCommand:ai-commit.showAvailableModels"
-  ],
+  "activationEvents": [],
   "contributes": {
     "commands": [
       {

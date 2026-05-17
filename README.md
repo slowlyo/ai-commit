@@ -4,7 +4,7 @@
 
 <img height="120" src="https://github.com/slowlyo/ai-commit/blob/main/images/logo.png?raw=true">
 
-<h1>AI Commit</h1>
+<h1>Commit Message AI</h1>
 
 使用 OpenAI (兼容) 应用程序接口审核代码版本管理变更内容，生成符合规范的标准化提交信息，简化提交流程，统一代码提交规范。
 
@@ -64,5 +64,5 @@
 
 <!-- LINK GROUP -->
 
-[github-issues-link]: https://github.com/lainbo/ai-commit/issues
+[github-issues-link]: https://github.com/slowlyo/ai-commit/issues
 [vscode-marketplace-link]: https://marketplace.visualstudio.com/items?itemName=lainbo.nota-ai-commit-lainbo
