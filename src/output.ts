@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-const OUTPUT_CHANNEL_NAME = 'Nota AI Commit';
+const OUTPUT_CHANNEL_NAME = 'AI Commit';
 
 let outputChannel: vscode.OutputChannel | undefined;
 

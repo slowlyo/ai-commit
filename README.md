@@ -4,71 +4,65 @@
 
 <img height="120" src="https://github.com/lainbo/ai-commit/blob/main/images/logo.png?raw=true">
 
-<h1>Nota AI Commit</h1>
+<h1>AI Commit</h1>
 
-Use OpenAI / Azure OpenAI / DeepSeek / Gemini API to review Git changes, generate conventional commit messages that meet the conventions, simplify the commit process, and keep the commit conventions consistent.
+使用 OpenAI (兼容) 应用程序接口审核代码版本管理变更内容，生成符合规范的标准化提交信息，简化提交流程，统一代码提交规范。
 
-**English** · [简体中文](./README.zh_CN.md) · [Marketplace][vscode-marketplace-link] · [Report Bug][github-issues-link] · [Request Feature][github-issues-link]
+**简体中文** · [插件市场][vscode-marketplace-link] · [报告问题][github-issues-link] · [请求功能][github-issues-link]
 
 <!-- SHIELD GROUP -->
 
 </div>
 
-## ✨ Features
+## ✨ 特性
 
-- 🤯 Support generating commit messages based on git diffs using ChatGPT / Azure API / DeepSeek / Gemini API.
-- 🗺️ Support multi-language commit messages.
-- 😜 Support adding Gitmoji.
-- 🛠️ Support custom system prompt.
-- 📝 Support Conventional Commits specification.
+- 🤯 支持使用 OpenAI (兼容) 应用程序接口基于 git diffs 生成提交信息。
+- 🗺️ 支持多语言提交信息。
+- 😜 支持添加 Gitmoji。
+- 🛠️ 支持自定义系统提示词。
+- 📝 支持 Conventional Commits 规范。
 
 ---
 
-**This project is forked from [sitoi/ai-commit](https://github.com/sitoi/ai-commit) with the following enhancements:**
+**本项目 Fork 自 [sitoi/ai-commit](https://github.com/sitoi/ai-commit)，并新增以下功能：**
 
-- ✅ Allow generating commit messages even when there are no staged changes (default behavior: prefer staged diff, fallback to unstaged diff)
-- ✅ Add `ai-commit.DIFF_SOURCE` setting to control which git changes are used (`auto` / `staged` / `unstaged` / `staged+unstaged`)
-- ✅ Add `ai-commit.SCM_INPUT_BEHAVIOR` setting to control whether to send the SCM input box content as AI context (`context` / `ignore`)
-- ✅ Add `ai-commit.REFERENCE_GIT_LOG` setting to provide recent `git log --oneline` history as model context
-- ✅ Supports Custom Endpoint URLs for Gemini
+- ✅ 即使没有暂存变更也允许生成提交信息（默认：优先使用暂存区 diff；若为空则回退到未暂存 diff）
+- ✅ 新增配置 `ai-commit.DIFF_SOURCE` 用于控制生成时使用哪些改动（`auto` / `staged` / `unstaged` / `staged+unstaged`）
+- ✅ 新增配置 `ai-commit.SCM_INPUT_BEHAVIOR` 用于控制是否将源代码管理输入框内容作为 AI 上下文发送（`context` / `ignore`）
+- ✅ 新增配置 `ai-commit.REFERENCE_GIT_LOG`，可把最近的 `git log --oneline` 提交历史作为模型参考上下文
 
-## 📦 Installation
+## 📦 安装
 
-1. Search for "Nota AI Commit" in VSCode and click the "Install" button.
-2. Install it directly from the [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=lainbo.nota-ai-commit-lainbo).
+1. 在 VSCode 中搜索 "AI Commit" 并点击 "Install" 按钮。
+2. 从 [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=lainbo.nota-ai-commit-lainbo) 直接安装。
 
 > **Note**\
-> Make sure your node version >= 16
+> 请确保 Node.js 版本 >= 16
 
-### ⚙️ Configuration
+### ⚙️ 配置
 
-In the VSCode settings, locate the "ai-commit" configuration options and configure them as needed:
+在 VSCode 设置中，找到 "ai-commit" 配置项，并按需配置：
 
-| Configuration      |  Type  |       Default        | Required |                                                       Notes                                                        |
-| :----------------- | :----: | :------------------: | :------: | :----------------------------------------------------------------------------------------------------------------- |
-| DIFF_SOURCE        | string |         auto         |    No    |      Which changes to use: `auto` (prefer staged), `staged`, `unstaged`, `staged+unstaged` (adds separators).      |
-| SCM_INPUT_BEHAVIOR | string |       context        |    No    | How to treat SCM input box content: `ignore` (always ignore), `context` (send as additional context/requirements). |
-| REFERENCE_GIT_LOG  |  bool  |        false         |    No    |        Include recent `git log --oneline` history as additional context for the model (disabled by default).        |
-| GIT_LOG_COUNT      | number |          20          |    No    |                           How many recent commits to include (1-50).                           |
-| GIT_LOG_AUTHOR_SCOPE | string |         all        |    No    |                      Which authors to include: `all` or `self` (uses `git config user.name`).                      |
-| AI_PROVIDER        | string |        openai        |   Yes    |                                     Select AI Provider: `openai` or `gemini`.                                      |
-| OPENAI_API_KEY     | string |         None         |   Yes    |    Required when `AI Provider` is set to `OpenAI`. [OpenAI token](https://platform.openai.com/account/api-keys)    |
-| OPENAI_BASE_URL    | string |         None         |    No    |                If using Azure, use: https://{resource}.openai.azure.com/openai/deployments/{model}                 |
-| OPENAI_MODEL       | string |      gpt-5-mini      |   Yes    |      OpenAI MODEL, you can select a model from the list by running the `Show Available OpenAI Models` command      |
-| AZURE_API_VERSION  | string |         None         |    No    |                                                 AZURE_API_VERSION                                                  |
-| OPENAI_TEMPERATURE | number |         0.7          |    No    |      Controls randomness in the output. Range: 0-2. Lower values: more focused, Higher values: more creative       |
-| GEMINI_API_KEY     | string |         None         |   Yes    |     Required when `AI Provider` is set to `Gemini`. [Gemini API key](https://makersuite.google.com/app/apikey)     |
-| GEMINI_BASE_URL    | string |         None         |    No    |         Gemini Base URL (optional). Use a third-party provider endpoint if needed; otherwise leave empty.          |
-| GEMINI_MODEL       | string | gemini-2.0-flash-001 |   Yes    |                       Gemini MODEL. Currently, model selection is limited to configuration.                        |
-| GEMINI_TEMPERATURE | number |         0.7          |    No    | Controls randomness in the output. Range: 0-2 for Gemini. Lower values: more focused, Higher values: more creative |
-| AI_COMMIT_LANGUAGE | string |          en          |   Yes    |                                               Supports 19 languages                                                |
-| SYSTEM_PROMPT      | string |         None         |    No    |                                                Custom system prompt                                                |
+| 配置                 |  类型  |    默认    | 必填 | 说明                                                                                                |
+| :------------------- | :----: | :--------: | :--: | :-------------------------------------------------------------------------------------------------- |
+| DIFF_SOURCE          | string |    auto    |  否  | 使用哪些改动：`auto`（优先暂存）、`staged`、`unstaged`、`staged+unstaged`（会增加分隔符）。         |
+| SCM_INPUT_BEHAVIOR   | string |  context   |  否  | 生成时如何处理输入框：`ignore`（始终忽略），`context`（作为额外上下文/约束发送，例如 Bug ID）。     |
+| REFERENCE_GIT_LOG    |  bool  |   false    |  否  | 是否把最近的 `git log --oneline` 提交历史作为额外上下文提供给模型参考（默认关闭）。                 |
+| GIT_LOG_COUNT        | number |     20     |  否  | 提供给模型参考的最近提交条数（1-50）。                                                              |
+| GIT_LOG_AUTHOR_SCOPE | string |    all     |  否  | 提交历史包含哪些作者：`all` 或 `self`（`self` 使用 `git config user.name` 过滤）。                  |
+| OPENAI_API_KEY       | string |    None    |  是  | OpenAI (兼容) API Key。[OpenAI token](https://platform.openai.com/account/api-keys)                 |
+| OPENAI_BASE_URL      | string |    None    |  否  | OpenAI (兼容) Base URL。请填写到 `/v1`，例如 `https://api.openai.com/v1`。                          |
+| OPENAI_MODEL         | string | gpt-5-mini |  是  | OpenAI (兼容) 模型；你可以运行 `Show Available OpenAI Models` 命令从列表中选择一个模型。            |
+| OPENAI_TEMPERATURE   | number |    0.7     |  否  | 控制输出随机性。范围：0-2。值越低越集中，值越高越有创造性。                                         |
+| OPENAI_EXTRA_BODY    | string |    None    |  否  | OpenAI (兼容) Chat Completions 额外请求体参数，必须是 JSON 对象。例如：`{"reasoning_split":true}`。 |
+| AI_COMMIT_LANGUAGE   | string |     en     |  是  | 支持 19 种语言                                                                                      |
+| SYSTEM_PROMPT        | string |    None    |  否  | 自定义系统提示词                                                                                    |
 
 ---
 
-## 📝 License
+## 📝 许可证
 
-This project is [MIT](./LICENSE) licensed.
+本项目使用 [MIT](./license) 许可证。
 
 <!-- LINK GROUP -->
 

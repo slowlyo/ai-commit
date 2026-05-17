@@ -2,12 +2,21 @@ import * as fs from 'fs-extra';
 import { ChatCompletionMessageParam } from 'openai/resources';
 import * as vscode from 'vscode';
 import { ConfigKeys, ConfigurationManager } from './config';
-import { getDiffStaged, getDiffUnstaged, getUntrackedDiff, getGitLogOneline, GitLogAuthorScope } from './git-utils';
-import { ChatGPTAPI, getOpenAIChatCompletionsRequestUrl } from './openai-utils';
+import {
+  getDiffStaged,
+  getDiffUnstaged,
+  getUntrackedDiff,
+  getGitLogOneline,
+  GitLogAuthorScope
+} from './git-utils';
+import {
+  OpenAICompatibleAPI,
+  getOpenAIChatCompletionsRequestUrl
+} from './openai-utils';
 import { getMainCommitPrompt } from './prompts';
 import { ProgressHandler } from './utils';
-import { GeminiAPI, getGeminiGenerateContentRequestUrl } from './gemini-utils';
 import { getOutputChannel, logError, logInfo, logSection } from './output';
+import { t } from './i18n';
 
 type DiffSource = 'auto' | 'staged' | 'unstaged' | 'staged+unstaged';
 
@@ -74,7 +83,7 @@ const generateCommitMessageChatCompletionPrompt = async (
 export async function getRepo(arg) {
   const gitApi = vscode.extensions.getExtension('vscode.git')?.exports.getAPI(1);
   if (!gitApi) {
-    throw new Error('Git extension not found');
+    throw new Error(t('error.gitExtensionMissing'));
   }
 
   if (typeof arg === 'object' && arg.rootUri) {
@@ -103,17 +112,19 @@ export async function generateCommitMsg(arg) {
       const configManager = ConfigurationManager.getInstance();
       const repo = await getRepo(arg);
 
-      const aiProvider = configManager.getConfig<string>(ConfigKeys.AI_PROVIDER, 'openai');
-      const diffSource = configManager.getConfig<DiffSource>(ConfigKeys.DIFF_SOURCE, 'auto');
+      const diffSource = configManager.getConfig<DiffSource>(
+        ConfigKeys.DIFF_SOURCE,
+        'auto'
+      );
       const scmInputBehavior = configManager.getConfig<string>(
         ConfigKeys.SCM_INPUT_BEHAVIOR,
         'context'
       );
-      logInfo(`AI Provider: ${aiProvider}`);
+      logInfo('AI 接口：OpenAI Compatible');
       logInfo(`Diff Source: ${diffSource}`);
       logInfo(`SCM Input Behavior: ${scmInputBehavior}`);
 
-      progress.report({ message: 'Getting git changes...' });
+      progress.report({ message: t('progress.gettingGitChanges') });
       const [stagedResult, unstagedResult, untrackedResult] = await Promise.all([
         getDiffStaged(repo),
         getDiffUnstaged(repo),
@@ -121,11 +132,13 @@ export async function generateCommitMsg(arg) {
       ]);
 
       if (stagedResult.error) {
-        throw new Error(`Failed to get staged changes: ${stagedResult.error}`);
+        throw new Error(t('error.stagedDiffFailed', { message: stagedResult.error }));
       }
 
       if (unstagedResult.error) {
-        throw new Error(`Failed to get unstaged changes: ${unstagedResult.error}`);
+        throw new Error(
+          t('error.unstagedDiffFailed', { message: unstagedResult.error })
+        );
       }
 
       const stagedDiff = stagedResult.diff.trim();
@@ -144,7 +157,10 @@ export async function generateCommitMsg(arg) {
           selectedDiff = unstagedDiff;
           break;
         case 'staged+unstaged':
-          selectedDiff = [stagedDiff ? `--- STAGED ---\n${stagedDiff}` : '', unstagedDiff ? `--- UNSTAGED ---\n${unstagedDiff}` : '']
+          selectedDiff = [
+            stagedDiff ? `--- STAGED ---\n${stagedDiff}` : '',
+            unstagedDiff ? `--- UNSTAGED ---\n${unstagedDiff}` : ''
+          ]
             .filter(Boolean)
             .join('\n\n');
           break;
@@ -156,19 +172,17 @@ export async function generateCommitMsg(arg) {
 
       if (!selectedDiff) {
         if (diffSource === 'staged') {
-          throw new Error(
-            "No staged changes found. Stage your changes (git add) or set 'ai-commit.DIFF_SOURCE' to 'unstaged'/'auto'."
-          );
+          throw new Error(t('error.noStagedChanges'));
         }
         if (diffSource === 'unstaged') {
-          throw new Error("No unstaged changes found. Modify files or set 'ai-commit.DIFF_SOURCE' to 'staged'/'auto'.");
+          throw new Error(t('error.noUnstagedChanges'));
         }
-        throw new Error('No git changes found to generate a commit message');
+        throw new Error(t('error.noChanges'));
       }
 
       const scmInputBox = repo.inputBox;
       if (!scmInputBox) {
-        throw new Error('Unable to find the SCM input box');
+        throw new Error(t('error.scmInputMissing'));
       }
 
       const scmInputText = scmInputBox.value.trim();
@@ -181,7 +195,7 @@ export async function generateCommitMsg(arg) {
 
       let gitLogContext: string | undefined;
       if (shouldReferenceGitLog) {
-        progress.report({ message: 'Reading git commit history...' });
+        progress.report({ message: t('progress.readingGitHistory') });
 
         const gitLogCount = configManager.getConfig<number>(
           ConfigKeys.GIT_LOG_COUNT,
@@ -215,8 +229,8 @@ export async function generateCommitMsg(arg) {
 
       progress.report({
         message: additionalContext
-          ? 'Analyzing changes with additional context...'
-          : 'Analyzing changes...'
+          ? t('progress.analyzingChangesWithContext')
+          : t('progress.analyzingChanges')
       });
       const messages = await generateCommitMessageChatCompletionPrompt(
         selectedDiff,
@@ -226,119 +240,69 @@ export async function generateCommitMsg(arg) {
 
       progress.report({
         message: additionalContext
-          ? 'Generating commit message with additional context...'
-          : 'Generating commit message...'
+          ? t('progress.generatingCommitMessageWithContext')
+          : t('progress.generatingCommitMessage')
       });
       try {
-        let commitMessage: string | undefined;
-
-        if (aiProvider === 'gemini') {
-          const geminiApiKey = configManager.getConfig<string>(ConfigKeys.GEMINI_API_KEY);
-          if (!geminiApiKey) {
-            throw new Error('Gemini API Key not configured');
-          }
-          const modelName = configManager.getConfig<string>(ConfigKeys.GEMINI_MODEL);
-          const baseUrl = configManager.getConfig<string>(ConfigKeys.GEMINI_BASE_URL);
-          logInfo(
-            `Gemini Request URL: ${getGeminiGenerateContentRequestUrl(modelName, baseUrl)}`
-          );
-          commitMessage = await GeminiAPI(messages);
-        } else {
-          const openaiApiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
-          if (!openaiApiKey) {
-            throw new Error('OpenAI API Key not configured');
-          }
-          const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
-          const apiVersion = configManager.getConfig<string>(ConfigKeys.AZURE_API_VERSION);
-          logInfo(
-            `OpenAI Request URL: ${getOpenAIChatCompletionsRequestUrl(baseURL, apiVersion)}`
-          );
-          commitMessage = await ChatGPTAPI(messages as ChatCompletionMessageParam[]);
+        const openaiApiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
+        if (!openaiApiKey) {
+          throw new Error(t('error.apiKeyMissing'));
         }
 
+        const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
+        logInfo(
+          `OpenAI Compatible Request URL: ${getOpenAIChatCompletionsRequestUrl(baseURL)}`
+        );
+        const commitMessage = await OpenAICompatibleAPI(
+          messages as ChatCompletionMessageParam[]
+        );
 
         if (commitMessage) {
           scmInputBox.value = commitMessage;
           logSection('AI 返回结果');
           getOutputChannel().appendLine(commitMessage);
         } else {
-          throw new Error('Failed to generate commit message');
+          throw new Error(t('error.commitMessageFailed'));
         }
       } catch (err) {
-        logError(err, `AI 请求失败（provider=${aiProvider}）`);
-        let errorMessage = 'An unexpected error occurred';
+        logError(err, 'OpenAI 兼容接口请求失败');
+        let errorMessage = t('error.requestUnexpected');
 
         const status = (err as any)?.status ?? (err as any)?.response?.status;
-        if (aiProvider === 'openai') {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (typeof status === 'number') {
-            switch (status) {
-              case 401:
-                errorMessage = 'Invalid OpenAI API key or unauthorized access';
-                break;
-              case 400:
-                if (
-                  /Invalid JSON payload received/i.test(msg) &&
-                  /Unknown name "\\s*messages\\s*"/i.test(msg)
-                ) {
-                  errorMessage =
-                    'OpenAI 请求返回了 Google/Gemini 风格的 400（不认识 messages/temperature）。' +
-                    '这通常意味着你把 ai-commit.OPENAI_BASE_URL 配成了 Gemini/Google 的接口，或使用了非 OpenAI 兼容的代理。' +
-                    '请检查：1) ai-commit.AI_PROVIDER 是否应切换为 gemini；2) OPENAI_BASE_URL 是否为 OpenAI 风格的 /v1（不要包含 /chat/completions，也不要是 googleapis.com）。';
-                } else {
-                  errorMessage = `OpenAI Bad Request (400): ${msg}`;
-                }
-                break;
-              case 404:
-                errorMessage =
-                  'OpenAI endpoint not found (404). Please check OPENAI_BASE_URL (should end with /v1, do not include /chat/completions).';
-                break;
-              case 429:
-                errorMessage = 'Rate limit exceeded. Please try again later';
-                break;
-              case 500:
-                errorMessage = 'OpenAI server error. Please try again later';
-                break;
-              case 503:
-                errorMessage = 'OpenAI service is temporarily unavailable';
-                break;
-              default:
-                errorMessage = `OpenAI API error (status ${status}): ${msg}`;
-                break;
-            }
-          } else {
-            errorMessage = `OpenAI API error: ${msg}`;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (typeof status === 'number') {
+          switch (status) {
+            case 401:
+              errorMessage = t('error.apiUnauthorized');
+              break;
+            case 400:
+              if (
+                /Invalid JSON payload received/i.test(msg) &&
+                /Unknown name "\\s*messages\\s*"/i.test(msg)
+              ) {
+                errorMessage = t('error.nonCompatible400');
+              } else {
+                errorMessage = t('error.badRequest', { message: msg });
+              }
+              break;
+            case 404:
+              errorMessage = t('error.endpointNotFound');
+              break;
+            case 429:
+              errorMessage = t('error.rateLimited');
+              break;
+            case 500:
+              errorMessage = t('error.serverError');
+              break;
+            case 503:
+              errorMessage = t('error.serviceUnavailable');
+              break;
+            default:
+              errorMessage = t('error.openaiStatus', { status, message: msg });
+              break;
           }
-        } else if (aiProvider === 'gemini') {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (typeof status === 'number') {
-            switch (status) {
-              case 400:
-                errorMessage = `Gemini Bad Request (400): ${msg}`;
-                break;
-              case 401:
-              case 403:
-                errorMessage = 'Invalid Gemini API key or unauthorized access. Please check ai-commit.GEMINI_API_KEY.';
-                break;
-              case 404:
-                errorMessage = 'Gemini endpoint not found (404). Please check ai-commit.GEMINI_BASE_URL and ai-commit.GEMINI_MODEL.';
-                break;
-              case 429:
-                errorMessage = 'Gemini rate limit exceeded. Please try again later.';
-                break;
-              case 500:
-                errorMessage = 'Gemini server error. Please try again later.';
-                break;
-              case 503:
-                errorMessage = 'Gemini service is temporarily unavailable.';
-                break;
-              default:
-                errorMessage = `Gemini API error (status ${status}): ${msg}`;
-                break;
-            }
-          } else {
-            errorMessage = `Gemini API error: ${msg}`;
-          }
+        } else {
+          errorMessage = t('error.openaiGeneric', { message: msg });
         }
 
         throw new Error(errorMessage);

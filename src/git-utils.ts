@@ -1,5 +1,6 @@
 import simpleGit from 'simple-git';
 import * as vscode from 'vscode';
+import { t } from './i18n';
 
 export type GitLogAuthorScope = 'all' | 'self';
 
@@ -7,9 +8,7 @@ export type GitLogAuthorScope = 'all' | 'self';
  * Resolves the repository root path.
  */
 function resolveRepoRootPath(repo: any): string {
-  return (
-    repo?.rootUri?.fsPath || vscode.workspace.workspaceFolders?.[0].uri.fsPath
-  );
+  return repo?.rootUri?.fsPath || vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 }
 
 /**
@@ -22,7 +21,7 @@ export async function getDiffStaged(
     const rootPath = resolveRepoRootPath(repo);
 
     if (!rootPath) {
-      throw new Error('No workspace folder found');
+      throw new Error(t('error.noWorkspaceFolder'));
     }
 
     const git = simpleGit(rootPath);
@@ -48,7 +47,7 @@ export async function getDiffUnstaged(
     const rootPath = resolveRepoRootPath(repo);
 
     if (!rootPath) {
-      throw new Error('No workspace folder found');
+      throw new Error(t('error.noWorkspaceFolder'));
     }
 
     const git = simpleGit(rootPath);
@@ -76,7 +75,7 @@ export async function getUntrackedDiff(
     const rootPath = resolveRepoRootPath(repo);
 
     if (!rootPath) {
-      throw new Error('No workspace folder found');
+      throw new Error(t('error.noWorkspaceFolder'));
     }
 
     const git = simpleGit(rootPath);
@@ -139,7 +138,7 @@ export async function getGitLogOneline(
     const rootPath = resolveRepoRootPath(repo);
 
     if (!rootPath) {
-      throw new Error('No workspace folder found');
+      throw new Error(t('error.noWorkspaceFolder'));
     }
 
     const git = simpleGit(rootPath);
@@ -149,10 +148,7 @@ export async function getGitLogOneline(
       return { log: '', error: null };
     }
 
-    const maxCount = Math.min(
-      50,
-      Math.max(1, Math.floor(options.maxCount ?? 20))
-    );
+    const maxCount = Math.min(50, Math.max(1, Math.floor(options.maxCount ?? 20)));
 
     const args = ['log', '-n', String(maxCount), '--oneline'];
 

@@ -1,43 +1,36 @@
 import * as vscode from 'vscode';
 import { createOpenAIApi } from './openai-utils';
-import { createGeminiAPIClient } from './gemini-utils';
 
 /**
- * Configuration keys used in the AI commit extension.
+ * AI Commit 插件使用的配置键。
  * @constant {Object}
- * @property {string} OPENAI_API_KEY - The key for OpenAI API.
- * @property {string} OPENAI_BASE_URL - The base URL for OpenAI API.
- * @property {string} OPENAI_MODEL - The model used for OpenAI.
- * @property {string} AZURE_API_VERSION - The version of Azure API.
- * @property {string} AI_COMMIT_LANGUAGE - The language for AI commit messages.
- * @property {string} SYSTEM_PROMPT - The system prompt for generating commit messages.
- * @property {string} OPENAI_TEMPERATURE - The temperature setting for OpenAI API.
+ * @property {string} OPENAI_API_KEY - OpenAI 兼容接口密钥。
+ * @property {string} OPENAI_BASE_URL - OpenAI 兼容接口地址。
+ * @property {string} OPENAI_MODEL - OpenAI 兼容模型名称。
+ * @property {string} AI_COMMIT_LANGUAGE - 提交信息语言。
+ * @property {string} SYSTEM_PROMPT - 生成提交信息时使用的系统提示词。
+ * @property {string} OPENAI_TEMPERATURE - OpenAI 兼容接口 temperature 参数。
+ * @property {string} OPENAI_EXTRA_BODY - OpenAI 兼容接口额外请求体参数。
  */
 export enum ConfigKeys {
   OPENAI_API_KEY = 'OPENAI_API_KEY',
   OPENAI_BASE_URL = 'OPENAI_BASE_URL',
   OPENAI_MODEL = 'OPENAI_MODEL',
-  AZURE_API_VERSION = 'AZURE_API_VERSION',
   AI_COMMIT_LANGUAGE = 'AI_COMMIT_LANGUAGE',
   SYSTEM_PROMPT = 'AI_COMMIT_SYSTEM_PROMPT',
   OPENAI_TEMPERATURE = 'OPENAI_TEMPERATURE',
+  OPENAI_EXTRA_BODY = 'OPENAI_EXTRA_BODY',
   DIFF_SOURCE = 'DIFF_SOURCE',
 
   SCM_INPUT_BEHAVIOR = 'SCM_INPUT_BEHAVIOR',
 
   REFERENCE_GIT_LOG = 'REFERENCE_GIT_LOG',
   GIT_LOG_COUNT = 'GIT_LOG_COUNT',
-  GIT_LOG_AUTHOR_SCOPE = 'GIT_LOG_AUTHOR_SCOPE',
-  
-  GEMINI_API_KEY = 'GEMINI_API_KEY',
-  GEMINI_BASE_URL = 'GEMINI_BASE_URL',
-  GEMINI_MODEL = 'GEMINI_MODEL',
-  GEMINI_TEMPERATURE = 'GEMINI_TEMPERATURE',
-  AI_PROVIDER = 'AI_PROVIDER',
+  GIT_LOG_AUTHOR_SCOPE = 'GIT_LOG_AUTHOR_SCOPE'
 }
 
 /**
- * Manages the configuration for the AI commit extension.
+ * 管理 AI Commit 插件配置。
  */
 export class ConfigurationManager {
   private static instance: ConfigurationManager;
@@ -51,10 +44,10 @@ export class ConfigurationManager {
       if (event.affectsConfiguration('ai-commit')) {
         this.configCache.clear();
 
-        const aiProvider = this.getConfig<string>('AI_PROVIDER', 'openai');
-        if (aiProvider === 'openai' &&
-          (event.affectsConfiguration('ai-commit.OPENAI_BASE_URL') ||
-          event.affectsConfiguration('ai-commit.OPENAI_API_KEY'))) {
+        if (
+          event.affectsConfiguration('ai-commit.OPENAI_BASE_URL') ||
+          event.affectsConfiguration('ai-commit.OPENAI_API_KEY')
+        ) {
           this.updateOpenAIModelList();
         }
       }
@@ -81,24 +74,28 @@ export class ConfigurationManager {
   }
 
   /**
-   * Updates the list of available OpenAI models.
+   * 更新可用的 OpenAI 兼容模型列表。
    */
   private async updateOpenAIModelList() {
     try {
       const openai = createOpenAIApi();
       const models = await openai.models.list();
 
-      // Save available models to extension state
-      await this.context.globalState.update('availableOpenAIModels', models.data.map(model => model.id));
+      await this.context.globalState.update(
+        'availableOpenAIModels',
+        models.data.map((model) => model.id)
+      );
 
-      // Get the current selected model
       const config = vscode.workspace.getConfiguration('ai-commit');
       const currentModel = config.get<string>('OPENAI_MODEL');
 
-      // If the current selected model is not in the available list, set it to the default value
-      const availableModels = models.data.map(model => model.id);
+      const availableModels = models.data.map((model) => model.id);
       if (!availableModels.includes(currentModel)) {
-        await config.update('OPENAI_MODEL', 'gpt-5-mini', vscode.ConfigurationTarget.Global);
+        await config.update(
+          'OPENAI_MODEL',
+          'gpt-5-mini',
+          vscode.ConfigurationTarget.Global
+        );
       }
     } catch (error) {
       console.error('Failed to fetch OpenAI models:', error);
@@ -106,8 +103,8 @@ export class ConfigurationManager {
   }
 
   /**
-   * Retrieves the list of available OpenAI models.
-   * @returns {Promise<string[]>} The list of available OpenAI models.
+   * 获取可用的 OpenAI 兼容模型列表。
+   * @returns {Promise<string[]>} 可用模型列表。
    */
   public async getAvailableOpenAIModels(): Promise<string[]> {
     if (!this.context.globalState.get<string[]>('availableOpenAIModels')) {
@@ -115,52 +112,4 @@ export class ConfigurationManager {
     }
     return this.context.globalState.get<string[]>('availableOpenAIModels', []);
   }
-
-  /**
-   * @deprecated
-   * This function is deprecated because Gemini API does not currently support listing models via API.
-   * We have to wait for this feature to be updated to the gemini library at some point, or find another way.
-   * 
-   * Updates the list of available Gemini models.
-   */
-  /*
-  private async updateGeminiModelList() {
-    try {
-      const geminiAPI = createGeminiAPIClient();
-      const modelListResponse = await geminiAPI.listModels(); // Gemini API does not currently have a function to get a list of models
-      const availableModels = modelListResponse.models.map(model => model.name);
-
-      // Save available Gemini models to extension global state
-      await this.context.globalState.update('availableGeminiModels', availableModels);
-
-      // Get the currently selected Gemini model
-      const config = vscode.workspace.getConfiguration('ai-commit');
-      const currentModel = config.get<string>('GEMINI_MODEL');
-
-      // If the current selected Gemini model is not in the available list, set it to a default value
-      if (currentModel && !availableModels.includes(currentModel)) {
-        await config.update('GEMINI_MODEL', 'gemini-2.0-flash-001', vscode.ConfigurationTarget.Global);
-      }
-
-    } catch (error) {
-      console.error('Failed to fetch Gemini models:', error);
-    }
-  }
-  */
-
-  /**
-   * @deprecated
-   * This function is deprecated because Gemini API does not currently support listing models via API.
-   * 
-   * Retrieves the list of available Gemini models.
-   * @returns {Promise<string[]>} The list of available Gemini models.
-   */
-  /*
-  public async getAvailableGeminiModels(): Promise<string[]> {
-    if (!this.context.globalState.get<string[]>('availableGeminiModels')) {
-      await this.updateGeminiModelList();
-    }
-    return this.context.globalState.get<string[]>('availableGeminiModels', []);
-  }
-  */
 }

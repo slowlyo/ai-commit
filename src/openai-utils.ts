@@ -1,27 +1,21 @@
 import OpenAI from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources';
 import { ConfigKeys, ConfigurationManager } from './config';
+import { t } from './i18n';
+
+type ExtraBody = Record<string, unknown>;
 
 export function getOpenAIChatCompletionsRequestUrl(
-  baseURL: string | undefined,
-  azureApiVersion: string | undefined
+  baseURL: string | undefined
 ): string {
-  const isAzure = Boolean(azureApiVersion && azureApiVersion.trim());
-  const effectiveBaseURL =
-    (baseURL && baseURL.trim()) || 'https://api.openai.com/v1';
+  const effectiveBaseURL = (baseURL && baseURL.trim()) || 'https://api.openai.com/v1';
 
   try {
     const url = new URL(effectiveBaseURL);
     url.pathname = joinUrlPath(url.pathname, 'chat/completions');
-    if (isAzure) {
-      url.searchParams.set('api-version', azureApiVersion!.trim());
-    }
     return url.toString();
   } catch {
-    const joined = `${effectiveBaseURL.replace(/\/+$/, '')}/chat/completions`;
-    return isAzure
-      ? `${joined}?api-version=${encodeURIComponent(azureApiVersion!.trim())}`
-      : joined;
+    return `${effectiveBaseURL.replace(/\/+$/, '')}/chat/completions`;
   }
 }
 
@@ -34,66 +28,80 @@ function joinUrlPath(basePath: string, suffix: string): string {
   return `${a}/${b}`;
 }
 
-function getOpenAIBaseURLHint(
-  baseURL: string | undefined,
-  azureApiVersion: string | undefined
-): string {
+function getOpenAIBaseURLHint(baseURL: string | undefined): string {
   const trimmed = (baseURL || '').trim();
-  const isAzure = Boolean(azureApiVersion && azureApiVersion.trim());
-  if (isAzure) {
-    return `（Azure）请填写到 deployments 层级，例如：https://{resource}.openai.azure.com/openai/deployments/{deployment}，并配置 ai-commit.AZURE_API_VERSION。`;
-  }
   if (!trimmed) {
-    return `如需自定义，请填写到 /v1，例如：https://api.openai.com/v1（不要填写 /chat/completions）。`;
+    return t('hint.openaiBaseUrlDefault');
   }
-  return `请确保 ai-commit.OPENAI_BASE_URL 填写到 /v1（不要填写 /chat/completions）。当前为：${trimmed}`;
+  return t('hint.openaiBaseUrlCurrent', { baseUrl: trimmed });
 }
 
 /**
- * Creates and returns an OpenAI configuration object.
- * @returns {Object} - The OpenAI configuration object.
- * @throws {Error} - Throws an error if the API key is missing or empty.
+ * 解析 OpenAI 兼容接口额外请求体参数。
+ */
+function getOpenAIExtraBody(rawValue: string | undefined): ExtraBody {
+  const trimmed = (rawValue || '').trim();
+
+  // 空值表示不追加任何 provider 专有参数。
+  if (!trimmed) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+
+    // 额外参数必须是对象，避免数组或基础类型覆盖请求体语义。
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(t('error.extraBodyInvalid', { value: trimmed }));
+    }
+
+    return parsed as ExtraBody;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(t('error.extraBodyInvalid', { value: trimmed }));
+    }
+    throw error;
+  }
+}
+
+/**
+ * 创建 OpenAI 兼容接口配置。
+ * @returns {Object} OpenAI 兼容接口配置。
+ * @throws {Error} 缺少 API Key 时抛出错误。
  */
 function getOpenAIConfig() {
   const configManager = ConfigurationManager.getInstance();
   const apiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
   const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
-  const apiVersion = configManager.getConfig<string>(ConfigKeys.AZURE_API_VERSION);
 
   if (!apiKey) {
-    throw new Error('The OPENAI_API_KEY configuration is missing or empty.');
+    throw new Error(t('error.apiKeyMissingConfig'));
   }
 
   const config: {
     apiKey: string;
     baseURL?: string;
-    defaultQuery?: { 'api-version': string };
-    defaultHeaders?: { 'api-key': string };
   } = {
     apiKey
   };
 
   if (baseURL) {
-    if (looksLikeGeminiOrGoogleEndpoint(baseURL)) {
+    if (looksLikeNonOpenAICompatibleEndpoint(baseURL)) {
       throw new Error(
-        `当前 ai-commit.OPENAI_BASE_URL 看起来是 Google/Gemini 接口：${baseURL}\n` +
-          `如果你在用 Gemini，请把 ai-commit.AI_PROVIDER 切换为 gemini，并填写 ai-commit.GEMINI_BASE_URL。\n` +
-          `如果你在用 OpenAI/OpenAI 兼容接口，请把 OPENAI_BASE_URL 填写为 OpenAI 风格的 /v1（不要包含 /chat/completions，也不要是 googleapis.com）。`
+        t('error.nonCompatibleBaseUrl', {
+          baseUrl: baseURL
+        })
       );
     }
     config.baseURL = baseURL;
-    if (apiVersion) {
-      config.defaultQuery = { 'api-version': apiVersion };
-      config.defaultHeaders = { 'api-key': apiKey };
-    }
   }
 
   return config;
 }
 
 /**
- * Creates and returns an OpenAI API instance.
- * @returns {OpenAI} - The OpenAI API instance.
+ * 创建 OpenAI 兼容接口实例。
+ * @returns {OpenAI} OpenAI 兼容接口实例。
  */
 export function createOpenAIApi() {
   const config = getOpenAIConfig();
@@ -101,34 +109,40 @@ export function createOpenAIApi() {
 }
 
 /**
- * Sends a chat completion request to the OpenAI API.
- * @param {Array<Object>} messages - The messages to send to the API.
- * @returns {Promise<string>} - A promise that resolves to the API response.
+ * 发送 OpenAI 兼容聊天补全请求。
+ * @param {Array<Object>} messages - 请求消息。
+ * @returns {Promise<string>} 模型返回内容。
  */
-export async function ChatGPTAPI(messages: ChatCompletionMessageParam[]) {
+export async function OpenAICompatibleAPI(messages: ChatCompletionMessageParam[]) {
   const openai = createOpenAIApi();
   const configManager = ConfigurationManager.getInstance();
   const model = configManager.getConfig<string>(ConfigKeys.OPENAI_MODEL);
-  const temperature = configManager.getConfig<number>(ConfigKeys.OPENAI_TEMPERATURE, 0.7);
+  const temperature = configManager.getConfig<number>(
+    ConfigKeys.OPENAI_TEMPERATURE,
+    0.7
+  );
   const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
-  const apiVersion = configManager.getConfig<string>(ConfigKeys.AZURE_API_VERSION);
+  const extraBody = getOpenAIExtraBody(
+    configManager.getConfig<string>(ConfigKeys.OPENAI_EXTRA_BODY, '')
+  );
 
   const completion = await openai.chat.completions.create({
     model,
     messages: messages as ChatCompletionMessageParam[],
-    temperature
-  });
+    temperature,
+    ...extraBody
+  } as any);
 
   const content = completion?.choices?.[0]?.message?.content;
   if (!content) {
-    const hint = getOpenAIBaseURLHint(baseURL, apiVersion);
-    throw new Error(`OpenAI 响应为空或格式不兼容。${hint}`);
+    const hint = getOpenAIBaseURLHint(baseURL);
+    throw new Error(t('error.openaiEmptyResponse', { hint }));
   }
 
   return content;
 }
 
-function looksLikeGeminiOrGoogleEndpoint(url: string): boolean {
+function looksLikeNonOpenAICompatibleEndpoint(url: string): boolean {
   const lower = (url || '').toLowerCase();
   return (
     lower.includes('generativelanguage.googleapis.com') ||

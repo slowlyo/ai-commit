@@ -1,7 +1,7 @@
 {
   "name": "nota-ai-commit-lainbo",
-  "displayName": "Nota AI Commit",
-  "description": "Use Azure/OpenAI/Gemini API to review Git changes, generate conventional commit messages that meet the conventions, simplify the commit process, and keep the commit conventions consistent.",
+  "displayName": "AI Commit",
+  "description": "使用 OpenAI (兼容) 应用程序接口审核代码版本管理变更内容，生成符合规范的标准化提交信息，简化提交流程，统一代码提交规范。",
   "version": "0.1.17",
   "engines": {
     "node": ">=16",
@@ -11,10 +11,8 @@
     "Other"
   ],
   "keywords": [
-    "Azure",
     "OpenAI",
-    "ChatGPT",
-    "Gemini",
+    "OpenAI Compatible",
     "GitEmoji",
     "Git Commit",
     "Conventional Commits",
@@ -35,7 +33,7 @@
     "commands": [
       {
         "command": "extension.ai-commit",
-        "icon": "images/logo1.svg",
+        "icon": "$(lightbulb-sparkle)",
         "title": "%aiCommit.command.aiCommit.title%"
       },
       {
@@ -47,15 +45,6 @@
       {
         "title": "%aiCommit.configuration.general.title%",
         "properties": {
-          "ai-commit.AI_PROVIDER": {
-            "type": "string",
-            "default": "openai",
-            "description": "%aiCommit.config.aiProvider.description%",
-            "enum": [
-              "openai",
-              "gemini"
-            ]
-          },
           "ai-commit.DIFF_SOURCE": {
             "type": "string",
             "default": "auto",
@@ -177,11 +166,6 @@
             "description": "%aiCommit.config.openaiBaseUrl.description%",
             "type": "string"
           },
-          "ai-commit.AZURE_API_VERSION": {
-            "default": "",
-            "description": "%aiCommit.config.azureApiVersion.description%",
-            "type": "string"
-          },
           "ai-commit.OPENAI_MODEL": {
             "default": "gpt-5-mini",
             "description": "%aiCommit.config.openaiModel.description%",
@@ -193,33 +177,11 @@
             "minimum": 0,
             "maximum": 2,
             "description": "%aiCommit.config.openaiTemperature.description%"
-          }
-        }
-      },
-      {
-        "title": "%aiCommit.configuration.gemini.title%",
-        "properties": {
-          "ai-commit.GEMINI_API_KEY": {
+          },
+          "ai-commit.OPENAI_EXTRA_BODY": {
             "type": "string",
             "default": "",
-            "description": "%aiCommit.config.geminiApiKey.description%"
-          },
-          "ai-commit.GEMINI_BASE_URL": {
-            "type": "string",
-            "default": "",
-            "description": "%aiCommit.config.geminiBaseUrl.description%"
-          },
-          "ai-commit.GEMINI_MODEL": {
-            "type": "string",
-            "default": "gemini-2.0-flash-001",
-            "description": "%aiCommit.config.geminiModel.description%"
-          },
-          "ai-commit.GEMINI_TEMPERATURE": {
-            "type": "number",
-            "default": 0.7,
-            "minimum": 0,
-            "maximum": 2,
-            "description": "%aiCommit.config.geminiTemperature.description%"
+            "description": "%aiCommit.config.openaiExtraBody.description%"
           }
         }
       }
@@ -268,7 +230,6 @@
     "webpack-cli": "^5.0.1"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "fs-extra": "^11.0.4",
     "openai": "^4.14.2",
     "simple-git": "^3.17.0"

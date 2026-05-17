@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 import { CommandManager } from './commands';
 import { ConfigurationManager } from './config';
 import { initOutputChannel, logError } from './output';
+import { t } from './i18n';
 
 /**
- * Activates the extension and registers commands.
+ * 激活插件并注册命令。
  *
- * @param {vscode.ExtensionContext} context - The context for the extension.
+ * @param {vscode.ExtensionContext} context - 插件上下文。
  */
 export async function activate(context: vscode.ExtensionContext) {
   try {
@@ -23,21 +24,18 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     });
 
-    const aiProvider = configManager.getConfig<string>('AI_PROVIDER', 'openai');
-    const apiKeyConfig = aiProvider === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY';
-    const apiKey = configManager.getConfig<string>(apiKeyConfig);
+    const apiKey = configManager.getConfig<string>('OPENAI_API_KEY');
     if (!apiKey) {
-      const providerLabel = aiProvider === 'gemini' ? 'Gemini' : 'OpenAI';
       const result = await vscode.window.showWarningMessage(
-        `${providerLabel} API Key not configured. Would you like to configure it now?`,
-        'Yes',
-        'No'
+        t('message.configureApiKey'),
+        t('button.yes'),
+        t('button.no')
       );
 
-      if (result === 'Yes') {
+      if (result === t('button.yes')) {
         await vscode.commands.executeCommand(
           'workbench.action.openSettings',
-          `ai-commit.${apiKeyConfig}`
+          'ai-commit.OPENAI_API_KEY'
         );
       }
     }
@@ -49,7 +47,6 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 /**
- * Deactivates the extension.
- * This function is called when the extension is deactivated.
+ * 停用插件。
  */
 export function deactivate() {}

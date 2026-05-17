@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import { generateCommitMsg } from './generate-commit-msg';
 import { ConfigurationManager } from './config';
 import { logError } from './output';
+import { t } from './i18n';
 
 /**
- * Manages the registration and disposal of commands.
+ * 管理命令注册和释放。
  */
 export class CommandManager {
   private disposables: vscode.Disposable[] = [];
@@ -17,49 +18,22 @@ export class CommandManager {
       vscode.commands.executeCommand('workbench.action.openSettings', 'ai-commit')
     );
 
-    // Show available models (currently only OpenAI supports listing models via API)
     this.registerCommand('ai-commit.showAvailableModels', async () => {
       const configManager = ConfigurationManager.getInstance();
-      const aiProvider = configManager.getConfig<string>('AI_PROVIDER', 'openai');
-
-      if (aiProvider === 'gemini') {
-        vscode.window.showInformationMessage(
-          'Gemini does not support listing models via API. Please manually set the model in ai-commit.GEMINI_MODEL.'
-        );
-        return;
-      }
-
       const models = await configManager.getAvailableOpenAIModels();
       const selected = await vscode.window.showQuickPick(models, {
-        placeHolder: 'Please select a model'
+        placeHolder: t('placeholder.selectModel')
       });
 
       if (selected) {
         const config = vscode.workspace.getConfiguration('ai-commit');
-        await config.update('OPENAI_MODEL', selected, vscode.ConfigurationTarget.Global);
+        await config.update(
+          'OPENAI_MODEL',
+          selected,
+          vscode.ConfigurationTarget.Global
+        );
       }
     });
-
-    /**
-     * @deprecated
-     * This function is deprecated because Gemini API does not currently support listing models via API.
-     * 
-     * Show available Gemini models
-     */
-    /*
-    this.registerCommand('ai-commit.showAvailableGeminiModels', async () => {
-      const configManager = ConfigurationManager.getInstance();
-      const models = await configManager.getAvailableGeminiModels(); // Use the updated function
-      const selected = await vscode.window.showQuickPick(models, {
-        placeHolder: 'Please select a Gemini model'
-      });
-
-      if (selected) {
-        const config = vscode.workspace.getConfiguration('ai-commit');
-        await config.update('GEMINI_MODEL', selected, vscode.ConfigurationTarget.Global);
-      }
-    });
-    */
   }
 
   private registerCommand(command: string, handler: (...args: any[]) => any) {
@@ -68,17 +42,16 @@ export class CommandManager {
         await handler(...args);
       } catch (error) {
         logError(error, `命令执行失败：${command}`);
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         const result = await vscode.window.showErrorMessage(
-          `Failed: ${errorMessage}`,
-          'Retry',
-          'Configure'
+          t('error.commandFailed', { message: errorMessage }),
+          t('button.retry'),
+          t('button.configure')
         );
 
-        if (result === 'Retry') {
+        if (result === t('button.retry')) {
           await handler(...args);
-        } else if (result === 'Configure') {
+        } else if (result === t('button.configure')) {
           await vscode.commands.executeCommand(
             'workbench.action.openSettings',
             'ai-commit'
