@@ -48,13 +48,15 @@
 | REFERENCE_GIT_LOG    |  bool  |   false    |  否  | 是否把最近的 `git log --oneline` 提交历史作为额外上下文提供给模型参考（默认关闭）。                 |
 | GIT_LOG_COUNT        | number |     20     |  否  | 提供给模型参考的最近提交条数（1-50）。                                                              |
 | GIT_LOG_AUTHOR_SCOPE | string |    all     |  否  | 提交历史包含哪些作者：`all` 或 `self`（`self` 使用 `git config user.name` 过滤）。                  |
+| USE_GITMOJI          |  bool  |    true    |  否  | 生成提交信息时是否包含 Gitmoji。                                                                    |
 | OPENAI_API_KEY       | string |    None    |  是  | OpenAI (兼容) API Key。[OpenAI token](https://platform.openai.com/account/api-keys)                 |
 | OPENAI_BASE_URL      | string |    None    |  否  | OpenAI (兼容) Base URL。请填写到 `/v1`，例如 `https://api.openai.com/v1`。                          |
 | OPENAI_MODEL         | string | gpt-5-mini |  是  | OpenAI (兼容) 模型；你可以运行 `Show Available OpenAI Models` 命令从列表中选择一个模型。            |
 | OPENAI_TEMPERATURE   | number |    0.7     |  否  | 控制输出随机性。范围：0-2。值越低越集中，值越高越有创造性。                                         |
 | OPENAI_EXTRA_BODY    | string |    None    |  否  | OpenAI (兼容) Chat Completions 额外请求体参数，必须是 JSON 对象。例如：`{"reasoning_split":true}`。 |
 | AI_COMMIT_LANGUAGE   | string |     en     |  是  | 支持 19 种语言                                                                                      |
-| SYSTEM_PROMPT        | string |    None    |  否  | 自定义系统提示词                                                                                    |
+| SYSTEM_PROMPT        | string |    None    |  否  | 自定义系统提示词。                                                                                  |
+| SYSTEM_PROMPT_MODE   | string |  override  |  否  | 自定义系统提示词使用方式：`override`（覆盖内置提示词）或 `append`（追加到内置提示词后）。           |
 
 ---
 

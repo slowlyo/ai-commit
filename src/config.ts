@@ -8,7 +8,9 @@ import { createOpenAIApi } from './openai-utils';
  * @property {string} OPENAI_BASE_URL - OpenAI 兼容接口地址。
  * @property {string} OPENAI_MODEL - OpenAI 兼容模型名称。
  * @property {string} AI_COMMIT_LANGUAGE - 提交信息语言。
+ * @property {string} USE_GITMOJI - 是否在提交信息中使用 Gitmoji。
  * @property {string} SYSTEM_PROMPT - 生成提交信息时使用的系统提示词。
+ * @property {string} SYSTEM_PROMPT_MODE - 自定义系统提示词的使用方式。
  * @property {string} OPENAI_TEMPERATURE - OpenAI 兼容接口 temperature 参数。
  * @property {string} OPENAI_EXTRA_BODY - OpenAI 兼容接口额外请求体参数。
  */
@@ -17,7 +19,9 @@ export enum ConfigKeys {
   OPENAI_BASE_URL = 'OPENAI_BASE_URL',
   OPENAI_MODEL = 'OPENAI_MODEL',
   AI_COMMIT_LANGUAGE = 'AI_COMMIT_LANGUAGE',
+  USE_GITMOJI = 'USE_GITMOJI',
   SYSTEM_PROMPT = 'AI_COMMIT_SYSTEM_PROMPT',
+  SYSTEM_PROMPT_MODE = 'AI_COMMIT_SYSTEM_PROMPT_MODE',
   OPENAI_TEMPERATURE = 'OPENAI_TEMPERATURE',
   OPENAI_EXTRA_BODY = 'OPENAI_EXTRA_BODY',
   DIFF_SOURCE = 'DIFF_SOURCE',

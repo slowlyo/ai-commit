@@ -2,7 +2,7 @@
   "name": "slowlyo-ai-commit",
   "displayName": "Commit Message AI",
   "description": "使用 OpenAI (兼容) 应用程序接口审核代码版本管理变更内容，生成符合规范的标准化提交信息，简化提交流程，统一代码提交规范。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "node": ">=16",
     "vscode": "^1.77.0"
@@ -100,10 +100,28 @@
             ],
             "type": "string"
           },
+          "ai-commit.USE_GITMOJI": {
+            "type": "boolean",
+            "default": true,
+            "description": "%aiCommit.config.useGitmoji.description%"
+          },
           "ai-commit.AI_COMMIT_SYSTEM_PROMPT": {
             "type": "string",
             "default": "",
             "description": "%aiCommit.config.systemPrompt.description%"
+          },
+          "ai-commit.AI_COMMIT_SYSTEM_PROMPT_MODE": {
+            "type": "string",
+            "default": "override",
+            "enum": [
+              "override",
+              "append"
+            ],
+            "enumDescriptions": [
+              "%aiCommit.config.systemPromptMode.enum.override%",
+              "%aiCommit.config.systemPromptMode.enum.append%"
+            ],
+            "description": "%aiCommit.config.systemPromptMode.description%"
           },
           "ai-commit.SCM_INPUT_BEHAVIOR": {
             "type": "string",

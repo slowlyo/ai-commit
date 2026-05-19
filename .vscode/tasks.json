@@ -5,21 +5,7 @@
       "type": "npm",
       "label": "npm: watch",
       "script": "watch",
-      "problemMatcher": {
-        "owner": "webpack",
-        "fileLocation": ["relative", "${workspaceFolder}"],
-        "pattern": [
-          {
-            "regexp": "^(ERROR in .+)$",
-            "message": 1
-          }
-        ],
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "^\\s*\\[webpack-cli\\] Compiler starting\\.\\.\\.",
-          "endsPattern": "^\\s*(\\[webpack-cli\\] Compiler finished|webpack\\s+\\d+\\.\\d+\\.\\d+\\s+compiled\\s+.*)$"
-        }
-      },
+      "problemMatcher": [],
       "isBackground": true,
       "presentation": {
         "reveal": "never",
@@ -45,6 +31,17 @@
       "label": "tasks: watch-tests",
       "dependsOn": ["npm: watch", "npm: watch-tests"],
       "problemMatcher": []
+    },
+    {
+      "type": "npm",
+      "label": "npm: package",
+      "script": "package",
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
     }
   ]
 }

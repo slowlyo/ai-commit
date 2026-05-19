@@ -21,6 +21,13 @@ import { t } from './i18n';
 type DiffSource = 'auto' | 'staged' | 'unstaged' | 'staged+unstaged';
 
 /**
+ * 移除模型输出末尾的空白行，保留提交信息正文内部换行。
+ */
+function trimTrailingBlankLines(message: string): string {
+  return message.replace(/(?:\r?\n[ \t]*)+$/g, '');
+}
+
+/**
  * Generates a chat completion prompt for the commit message based on the provided diff.
  *
  * @param {string} diff - The diff string representing changes to be committed.
@@ -253,8 +260,8 @@ export async function generateCommitMsg(arg) {
         logInfo(
           `OpenAI Compatible Request URL: ${getOpenAIChatCompletionsRequestUrl(baseURL)}`
         );
-        const commitMessage = await OpenAICompatibleAPI(
-          messages as ChatCompletionMessageParam[]
+        const commitMessage = trimTrailingBlankLines(
+          await OpenAICompatibleAPI(messages as ChatCompletionMessageParam[])
         );
 
         if (commitMessage) {
