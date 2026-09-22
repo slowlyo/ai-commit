@@ -1,9 +1,15 @@
+import * as vscode from 'vscode';
 import OpenAI from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources';
-import { ConfigKeys, ConfigurationManager } from './config';
+import { ConfigurationManager, ModelProfile } from './config';
 import { t } from './i18n';
 
 type ExtraBody = Record<string, unknown>;
+
+export interface OpenAIOptions {
+  signal?: AbortSignal;
+  cancellationToken?: vscode.CancellationToken;
+}
 
 export function getOpenAIChatCompletionsRequestUrl(
   baseURL: string | undefined
@@ -66,16 +72,22 @@ function getOpenAIExtraBody(rawValue: string | undefined): ExtraBody {
 
 /**
  * 创建 OpenAI 兼容接口配置。
+ * @param {ModelProfile} [profile] - 可选指定的配置档案，默认使用当前生效档案。
  * @returns {Object} OpenAI 兼容接口配置。
  * @throws {Error} 缺少 API Key 时抛出错误。
  */
-function getOpenAIConfig() {
+function getOpenAIConfig(profile?: ModelProfile) {
   const configManager = ConfigurationManager.getInstance();
-  const apiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
-  const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
+  const effectiveProfile = profile ?? configManager.getActiveProfile();
+  const apiKey = effectiveProfile.apiKey;
+  const baseURL = effectiveProfile.baseUrl;
 
   if (!apiKey) {
-    throw new Error(t('error.apiKeyMissingConfig'));
+    throw new Error(
+      effectiveProfile.name
+        ? t('error.apiKeyMissingProfile', { profile: effectiveProfile.name })
+        : t('error.apiKeyMissingConfig')
+    );
   }
 
   const config: {
@@ -101,45 +113,113 @@ function getOpenAIConfig() {
 
 /**
  * 创建 OpenAI 兼容接口实例。
+ * @param {ModelProfile} [profile] - 可选指定的配置档案。
  * @returns {OpenAI} OpenAI 兼容接口实例。
  */
-export function createOpenAIApi() {
-  const config = getOpenAIConfig();
+export function createOpenAIApi(profile?: ModelProfile) {
+  const config = getOpenAIConfig(profile);
   return new OpenAI(config);
 }
 
 /**
  * 发送 OpenAI 兼容聊天补全请求。
  * @param {Array<Object>} messages - 请求消息。
+ * @param {OpenAIOptions} [options] - 取消控制参数（支持 AbortSignal 和 vscode.CancellationToken）。
  * @returns {Promise<string>} 模型返回内容。
  */
-export async function OpenAICompatibleAPI(messages: ChatCompletionMessageParam[]) {
-  const openai = createOpenAIApi();
+export async function OpenAICompatibleAPI(
+  messages: ChatCompletionMessageParam[],
+  options?: OpenAIOptions
+) {
   const configManager = ConfigurationManager.getInstance();
-  const model = configManager.getConfig<string>(ConfigKeys.OPENAI_MODEL);
-  const temperature = configManager.getConfig<number>(
-    ConfigKeys.OPENAI_TEMPERATURE,
-    0.7
-  );
-  const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
-  const extraBody = getOpenAIExtraBody(
-    configManager.getConfig<string>(ConfigKeys.OPENAI_EXTRA_BODY, '')
-  );
+  const profile = configManager.getActiveProfile();
+  const openai = createOpenAIApi(profile);
+  const model = profile.model || 'gpt-5-mini';
+  const temperature = profile.temperature ?? 0.7;
+  const baseURL = profile.baseUrl;
+  const extraBody = getOpenAIExtraBody(profile.extraBody);
 
-  const completion = await openai.chat.completions.create({
-    model,
-    messages: messages as ChatCompletionMessageParam[],
-    temperature,
-    ...extraBody
-  } as any);
+  const abortController = new AbortController();
+  let tokenListener: vscode.Disposable | undefined;
 
-  const content = completion?.choices?.[0]?.message?.content;
-  if (!content) {
-    const hint = getOpenAIBaseURLHint(baseURL);
-    throw new Error(t('error.openaiEmptyResponse', { hint }));
+  if (options?.cancellationToken) {
+    if (options.cancellationToken.isCancellationRequested) {
+      abortController.abort();
+    } else {
+      tokenListener = options.cancellationToken.onCancellationRequested(() => {
+        abortController.abort();
+      });
+    }
   }
 
-  return content;
+  let signalListener: (() => void) | undefined;
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      abortController.abort();
+    } else {
+      signalListener = () => {
+        abortController.abort();
+      };
+      options.signal.addEventListener('abort', signalListener, { once: true });
+    }
+  }
+
+  try {
+    const completion = await openai.chat.completions.create(
+      {
+        model,
+        messages: messages as ChatCompletionMessageParam[],
+        temperature,
+        ...extraBody
+      } as any,
+      {
+        signal: abortController.signal
+      }
+    );
+
+    const content = completion?.choices?.[0]?.message?.content;
+    if (!content) {
+      const hint = getOpenAIBaseURLHint(baseURL);
+      throw new Error(t('error.openaiEmptyResponse', { hint }));
+    }
+
+    return content;
+  } finally {
+    tokenListener?.dispose();
+    if (signalListener && options?.signal) {
+      options.signal.removeEventListener('abort', signalListener);
+    }
+  }
+}
+
+/**
+ * 判断是否为网络中止或用户取消引起的错误。
+ */
+export function isAbortError(error: unknown): boolean {
+  if (!error) {
+    return false;
+  }
+  if (error instanceof OpenAI.APIUserAbortError) {
+    return true;
+  }
+  const err = error as any;
+  if (
+    err.name === 'APIUserAbortError' ||
+    err.name === 'AbortError' ||
+    err.name === 'CancellationError'
+  ) {
+    return true;
+  }
+  if (err.code === 'ERR_CANCELED' || err.type === 'aborted') {
+    return true;
+  }
+  if (
+    typeof err.message === 'string' &&
+    /Request was aborted|aborted|cancelled|canceled/i.test(err.message)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function looksLikeNonOpenAICompatibleEndpoint(url: string): boolean {

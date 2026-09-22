@@ -29,13 +29,35 @@
 - ✅ 更改 AI 来源为 OpenAI (兼容) 应用程序接口
 - ✅ 支持通过 `ai-commit.OPENAI_EXTRA_BODY` 自定义 Chat Completions 请求体参数
 
-## 📦 安装
+## 📦 发布与安装
 
+### 方式一：从 GitHub Releases 下载 .vsix 安装（推荐）
+1. 前往本项目的 [Releases](https://github.com/slowlyo/ai-commit/releases) 页面，下载最新版本的 `.vsix` 安装包（如 `slowlyo-ai-commit-x.y.z.vsix`）。
+2. 在 VS Code 中完成安装：
+   - **拖拽安装**：打开 VS Code 的「扩展」面板（Extensions），将下载的 `.vsix` 文件直接拖拽进扩展列表面板；或点击扩展面板右上角的 `...` 菜单，选择 **从 VSIX 安装... (Install from VSIX...)**。
+   - **命令行安装**：
+     ```bash
+     code --install-extension slowlyo-ai-commit-0.1.1.vsix
+     ```
+
+### 方式二：从 VS Code 插件市场安装
 1. 在 VSCode 中搜索 "AI Commit" 并点击 "Install" 按钮。
 2. 从 [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=lainbo.nota-ai-commit-lainbo) 直接安装。
 
 > **Note**\
 > 请确保 Node.js 版本 >= 16
+
+### 🏷️ 自动化构建与发布（CI/CD）
+本项目配置了 GitHub Actions 自动化发布流水线（`.github/workflows/release.yml`）：
+- **打 Tag 自动触发**：推送版本 tag（格式为 `v*`，如 `v0.1.2`）时，流水线会自动执行代码检查、编译并打包生成 `.vsix` 文件，随后创建对应版本的 GitHub Release 并将 `.vsix` 作为资产上传：
+  ```bash
+  # 创建版本 tag 并推送到远程仓库
+  git tag v0.1.2
+  git push origin v0.1.2
+  ```
+- **手动触发**：支持在 GitHub Actions 页面通过 **workflow_dispatch** 手动触发流水线（可选输入目标 tag/version）。
+- **Marketplace 发布（可选）**：若在仓库中配置了 `secrets.VS_MARKETPLACE_TOKEN`，流水线将自动把扩展发布至 Visual Studio Marketplace；若未配置 Token，Marketplace 发布步骤自动跳过，GitHub Release 与 `.vsix` 打包依然成功。
+
 
 ### ⚙️ 配置
 

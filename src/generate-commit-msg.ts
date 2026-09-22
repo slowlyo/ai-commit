@@ -11,7 +11,8 @@ import {
 } from './git-utils';
 import {
   OpenAICompatibleAPI,
-  getOpenAIChatCompletionsRequestUrl
+  getOpenAIChatCompletionsRequestUrl,
+  isAbortError
 } from './openai-utils';
 import { getMainCommitPrompt } from './prompts';
 import { ProgressHandler } from './utils';
@@ -112,12 +113,200 @@ export async function getRepo(arg) {
  * @param {any} arg - The input argument containing the root URI of the repository.
  * @returns {Promise<void>} - A promise that resolves when the commit message has been generated and set in the SCM input box.
  */
+const MAX_DIFF_LENGTH = 30000;
+const TRUNCATE_HEAD_LENGTH = 20000;
+const TRUNCATE_TAIL_LENGTH = 5000;
+
+/**
+ * 若 diff 过大，保留头尾并安全截断，避免模型请求拖慢或超时。
+ */
+function truncateDiffIfNeeded(diff: string): string {
+  if (diff.length <= MAX_DIFF_LENGTH) {
+    return diff;
+  }
+
+  const omittedCount = diff.length - TRUNCATE_HEAD_LENGTH - TRUNCATE_TAIL_LENGTH;
+  logInfo(
+    t('info.diffTruncated', {
+      length: diff.length,
+      limit: MAX_DIFF_LENGTH
+    })
+  );
+
+  const head = diff.slice(0, TRUNCATE_HEAD_LENGTH);
+  const tail = diff.slice(-TRUNCATE_TAIL_LENGTH);
+
+  return `${head}\n\n... [Diff truncated by AI Commit: original length ${diff.length} chars exceeded limit of ${MAX_DIFF_LENGTH}. Omitted ${omittedCount} characters to optimize performance.] ...\n\n${tail}`;
+}
+
+/**
+ * 根据 DIFF_SOURCE 按需收集 Git 变更，减少无用调用。
+ */
+async function collectGitDiff(
+  repo: any,
+  diffSource: DiffSource,
+  token?: vscode.CancellationToken
+): Promise<string> {
+  if (token?.isCancellationRequested) {
+    return '';
+  }
+
+  let selectedDiff = '';
+
+  switch (diffSource) {
+    case 'staged': {
+      logInfo('按需读取 Git 变更：仅读取暂存区 (staged)');
+      const stagedResult = await getDiffStaged(repo);
+      if (token?.isCancellationRequested) {
+        return '';
+      }
+      if (stagedResult.error) {
+        throw new Error(t('error.stagedDiffFailed', { message: stagedResult.error }));
+      }
+      selectedDiff = stagedResult.diff.trim();
+      if (!selectedDiff) {
+        throw new Error(t('error.noStagedChanges'));
+      }
+      break;
+    }
+
+    case 'unstaged': {
+      logInfo('按需读取 Git 变更：仅读取未暂存和未跟踪文件 (unstaged + untracked)');
+      const [unstagedResult, untrackedResult] = await Promise.all([
+        getDiffUnstaged(repo),
+        getUntrackedDiff(repo)
+      ]);
+      if (token?.isCancellationRequested) {
+        return '';
+      }
+      if (unstagedResult.error) {
+        throw new Error(
+          t('error.unstagedDiffFailed', { message: unstagedResult.error })
+        );
+      }
+      const rawUnstagedDiff = unstagedResult.diff.trim();
+      const rawUntrackedDiff = untrackedResult.diff.trim();
+      selectedDiff = [rawUnstagedDiff, rawUntrackedDiff].filter(Boolean).join('\n');
+      if (!selectedDiff) {
+        throw new Error(t('error.noUnstagedChanges'));
+      }
+      break;
+    }
+
+    case 'staged+unstaged': {
+      logInfo(
+        '按需读取 Git 变更：同时读取暂存区与未暂存区 (staged + unstaged + untracked)'
+      );
+      const [stagedResult, unstagedResult, untrackedResult] = await Promise.all([
+        getDiffStaged(repo),
+        getDiffUnstaged(repo),
+        getUntrackedDiff(repo)
+      ]);
+      if (token?.isCancellationRequested) {
+        return '';
+      }
+      if (stagedResult.error) {
+        throw new Error(t('error.stagedDiffFailed', { message: stagedResult.error }));
+      }
+      if (unstagedResult.error) {
+        throw new Error(
+          t('error.unstagedDiffFailed', { message: unstagedResult.error })
+        );
+      }
+      const stagedDiff = stagedResult.diff.trim();
+      const rawUnstagedDiff = unstagedResult.diff.trim();
+      const rawUntrackedDiff = untrackedResult.diff.trim();
+      const unstagedDiff = [rawUnstagedDiff, rawUntrackedDiff]
+        .filter(Boolean)
+        .join('\n');
+
+      selectedDiff = [
+        stagedDiff ? `--- STAGED ---\n${stagedDiff}` : '',
+        unstagedDiff ? `--- UNSTAGED ---\n${unstagedDiff}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      if (!selectedDiff) {
+        throw new Error(t('error.noChanges'));
+      }
+      break;
+    }
+
+    case 'auto':
+    default: {
+      logInfo('按需读取 Git 变更：auto 模式优先读取暂存区 (staged)');
+      const stagedResult = await getDiffStaged(repo);
+      if (token?.isCancellationRequested) {
+        return '';
+      }
+      if (stagedResult.error) {
+        throw new Error(t('error.stagedDiffFailed', { message: stagedResult.error }));
+      }
+      const stagedDiff = stagedResult.diff.trim();
+      if (stagedDiff) {
+        logInfo('auto 模式：检测到暂存区变更，跳过未暂存及未跟踪文件拉取');
+        selectedDiff = stagedDiff;
+      } else {
+        logInfo('auto 模式：暂存区为空，回退拉取未暂存及未跟踪文件');
+        const [unstagedResult, untrackedResult] = await Promise.all([
+          getDiffUnstaged(repo),
+          getUntrackedDiff(repo)
+        ]);
+        if (token?.isCancellationRequested) {
+          return '';
+        }
+        if (unstagedResult.error) {
+          throw new Error(
+            t('error.unstagedDiffFailed', { message: unstagedResult.error })
+          );
+        }
+        const rawUnstagedDiff = unstagedResult.diff.trim();
+        const rawUntrackedDiff = untrackedResult.diff.trim();
+        selectedDiff = [rawUnstagedDiff, rawUntrackedDiff].filter(Boolean).join('\n');
+      }
+
+      if (!selectedDiff) {
+        throw new Error(t('error.noChanges'));
+      }
+      break;
+    }
+  }
+
+  return selectedDiff;
+}
+
+/**
+ * Generates a commit message based on the changes staged in the repository.
+ *
+ * @param {any} arg - The input argument containing the root URI of the repository.
+ * @returns {Promise<void>} - A promise that resolves when the commit message has been generated and set in the SCM input box.
+ */
 export async function generateCommitMsg(arg) {
-  return ProgressHandler.withProgress('', async (progress) => {
+  return ProgressHandler.withProgress('', async (progress, token) => {
+    let cancellationHandled = false;
+    const notifyCancelled = () => {
+      if (!cancellationHandled) {
+        cancellationHandled = true;
+        logInfo(t('message.generationCancelled'));
+        vscode.window.showInformationMessage(t('message.generationCancelled'));
+      }
+    };
+
     try {
       logSection('开始生成提交信息');
+      if (token.isCancellationRequested) {
+        notifyCancelled();
+        return;
+      }
+
       const configManager = ConfigurationManager.getInstance();
       const repo = await getRepo(arg);
+
+      if (token.isCancellationRequested) {
+        notifyCancelled();
+        return;
+      }
 
       const diffSource = configManager.getConfig<DiffSource>(
         ConfigKeys.DIFF_SOURCE,
@@ -132,60 +321,14 @@ export async function generateCommitMsg(arg) {
       logInfo(`SCM Input Behavior: ${scmInputBehavior}`);
 
       progress.report({ message: t('progress.gettingGitChanges') });
-      const [stagedResult, unstagedResult, untrackedResult] = await Promise.all([
-        getDiffStaged(repo),
-        getDiffUnstaged(repo),
-        getUntrackedDiff(repo)
-      ]);
+      const rawDiff = await collectGitDiff(repo, diffSource, token);
 
-      if (stagedResult.error) {
-        throw new Error(t('error.stagedDiffFailed', { message: stagedResult.error }));
+      if (token.isCancellationRequested) {
+        notifyCancelled();
+        return;
       }
 
-      if (unstagedResult.error) {
-        throw new Error(
-          t('error.unstagedDiffFailed', { message: unstagedResult.error })
-        );
-      }
-
-      const stagedDiff = stagedResult.diff.trim();
-      const rawUnstagedDiff = unstagedResult.diff.trim();
-      const rawUntrackedDiff = untrackedResult.diff.trim();
-      const unstagedDiff = [rawUnstagedDiff, rawUntrackedDiff]
-        .filter(Boolean)
-        .join('\n');
-
-      let selectedDiff = '';
-      switch (diffSource) {
-        case 'staged':
-          selectedDiff = stagedDiff;
-          break;
-        case 'unstaged':
-          selectedDiff = unstagedDiff;
-          break;
-        case 'staged+unstaged':
-          selectedDiff = [
-            stagedDiff ? `--- STAGED ---\n${stagedDiff}` : '',
-            unstagedDiff ? `--- UNSTAGED ---\n${unstagedDiff}` : ''
-          ]
-            .filter(Boolean)
-            .join('\n\n');
-          break;
-        case 'auto':
-        default:
-          selectedDiff = stagedDiff || unstagedDiff;
-          break;
-      }
-
-      if (!selectedDiff) {
-        if (diffSource === 'staged') {
-          throw new Error(t('error.noStagedChanges'));
-        }
-        if (diffSource === 'unstaged') {
-          throw new Error(t('error.noUnstagedChanges'));
-        }
-        throw new Error(t('error.noChanges'));
-      }
+      const selectedDiff = truncateDiffIfNeeded(rawDiff);
 
       const scmInputBox = repo.inputBox;
       if (!scmInputBox) {
@@ -202,6 +345,10 @@ export async function generateCommitMsg(arg) {
 
       let gitLogContext: string | undefined;
       if (shouldReferenceGitLog) {
+        if (token.isCancellationRequested) {
+          notifyCancelled();
+          return;
+        }
         progress.report({ message: t('progress.readingGitHistory') });
 
         const gitLogCount = configManager.getConfig<number>(
@@ -221,6 +368,11 @@ export async function generateCommitMsg(arg) {
           authorScope: gitLogAuthorScope
         });
 
+        if (token.isCancellationRequested) {
+          notifyCancelled();
+          return;
+        }
+
         if (logResult.error) {
           logError(new Error(logResult.error), '读取 git log 失败');
         } else if (logResult.log.trim()) {
@@ -234,6 +386,11 @@ export async function generateCommitMsg(arg) {
         }
       }
 
+      if (token.isCancellationRequested) {
+        notifyCancelled();
+        return;
+      }
+
       progress.report({
         message: additionalContext
           ? t('progress.analyzingChangesWithContext')
@@ -245,24 +402,41 @@ export async function generateCommitMsg(arg) {
         gitLogContext
       );
 
+      if (token.isCancellationRequested) {
+        notifyCancelled();
+        return;
+      }
+
       progress.report({
         message: additionalContext
           ? t('progress.generatingCommitMessageWithContext')
           : t('progress.generatingCommitMessage')
       });
       try {
-        const openaiApiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
+        const activeProfile = configManager.getActiveProfile();
+        const openaiApiKey = activeProfile.apiKey;
         if (!openaiApiKey) {
-          throw new Error(t('error.apiKeyMissing'));
+          throw new Error(
+            t('error.apiKeyMissingProfile', { profile: activeProfile.name })
+          );
         }
 
-        const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
+        const baseURL = activeProfile.baseUrl;
+        logInfo(`Active Profile: ${activeProfile.name} (${activeProfile.id})`);
+        logInfo(`Model: ${activeProfile.model}`);
         logInfo(
           `OpenAI Compatible Request URL: ${getOpenAIChatCompletionsRequestUrl(baseURL)}`
         );
         const commitMessage = trimTrailingBlankLines(
-          await OpenAICompatibleAPI(messages as ChatCompletionMessageParam[])
+          await OpenAICompatibleAPI(messages as ChatCompletionMessageParam[], {
+            cancellationToken: token
+          })
         );
+
+        if (token.isCancellationRequested) {
+          notifyCancelled();
+          return;
+        }
 
         if (commitMessage) {
           scmInputBox.value = commitMessage;
@@ -272,6 +446,10 @@ export async function generateCommitMsg(arg) {
           throw new Error(t('error.commitMessageFailed'));
         }
       } catch (err) {
+        if (token.isCancellationRequested || isAbortError(err)) {
+          notifyCancelled();
+          return;
+        }
         logError(err, 'OpenAI 兼容接口请求失败');
         let errorMessage = t('error.requestUnexpected');
 
@@ -315,6 +493,10 @@ export async function generateCommitMsg(arg) {
         throw new Error(errorMessage);
       }
     } catch (error) {
+      if (token?.isCancellationRequested || isAbortError(error)) {
+        notifyCancelled();
+        return;
+      }
       logError(error, '生成提交信息失败');
       throw error;
     }
