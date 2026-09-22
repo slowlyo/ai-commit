@@ -98,8 +98,12 @@ export async function getUntrackedDiff(
           .catch((err: any) => {
             // git diff --no-index exits with code 1 when files differ,
             // simple-git treats this as an error but the output is valid diff
-            if (typeof err === 'string') return err;
-            if (err?.message) return err.message;
+            if (typeof err === 'string') {
+              return err;
+            }
+            if (err?.message) {
+              return err.message;
+            }
             return '';
           });
 

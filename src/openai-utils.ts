@@ -1,9 +1,15 @@
+import * as vscode from 'vscode';
 import OpenAI from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources';
 import { ConfigurationManager, ModelProfile } from './config';
 import { t } from './i18n';
 
 type ExtraBody = Record<string, unknown>;
+
+export interface OpenAIOptions {
+  signal?: AbortSignal;
+  cancellationToken?: vscode.CancellationToken;
+}
 
 export function getOpenAIChatCompletionsRequestUrl(
   baseURL: string | undefined
@@ -118,9 +124,13 @@ export function createOpenAIApi(profile?: ModelProfile) {
 /**
  * 发送 OpenAI 兼容聊天补全请求。
  * @param {Array<Object>} messages - 请求消息。
+ * @param {OpenAIOptions} [options] - 取消控制参数（支持 AbortSignal 和 vscode.CancellationToken）。
  * @returns {Promise<string>} 模型返回内容。
  */
-export async function OpenAICompatibleAPI(messages: ChatCompletionMessageParam[]) {
+export async function OpenAICompatibleAPI(
+  messages: ChatCompletionMessageParam[],
+  options?: OpenAIOptions
+) {
   const configManager = ConfigurationManager.getInstance();
   const profile = configManager.getActiveProfile();
   const openai = createOpenAIApi(profile);
@@ -129,20 +139,87 @@ export async function OpenAICompatibleAPI(messages: ChatCompletionMessageParam[]
   const baseURL = profile.baseUrl;
   const extraBody = getOpenAIExtraBody(profile.extraBody);
 
-  const completion = await openai.chat.completions.create({
-    model,
-    messages: messages as ChatCompletionMessageParam[],
-    temperature,
-    ...extraBody
-  } as any);
+  const abortController = new AbortController();
+  let tokenListener: vscode.Disposable | undefined;
 
-  const content = completion?.choices?.[0]?.message?.content;
-  if (!content) {
-    const hint = getOpenAIBaseURLHint(baseURL);
-    throw new Error(t('error.openaiEmptyResponse', { hint }));
+  if (options?.cancellationToken) {
+    if (options.cancellationToken.isCancellationRequested) {
+      abortController.abort();
+    } else {
+      tokenListener = options.cancellationToken.onCancellationRequested(() => {
+        abortController.abort();
+      });
+    }
   }
 
-  return content;
+  let signalListener: (() => void) | undefined;
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      abortController.abort();
+    } else {
+      signalListener = () => {
+        abortController.abort();
+      };
+      options.signal.addEventListener('abort', signalListener, { once: true });
+    }
+  }
+
+  try {
+    const completion = await openai.chat.completions.create(
+      {
+        model,
+        messages: messages as ChatCompletionMessageParam[],
+        temperature,
+        ...extraBody
+      } as any,
+      {
+        signal: abortController.signal
+      }
+    );
+
+    const content = completion?.choices?.[0]?.message?.content;
+    if (!content) {
+      const hint = getOpenAIBaseURLHint(baseURL);
+      throw new Error(t('error.openaiEmptyResponse', { hint }));
+    }
+
+    return content;
+  } finally {
+    tokenListener?.dispose();
+    if (signalListener && options?.signal) {
+      options.signal.removeEventListener('abort', signalListener);
+    }
+  }
+}
+
+/**
+ * 判断是否为网络中止或用户取消引起的错误。
+ */
+export function isAbortError(error: unknown): boolean {
+  if (!error) {
+    return false;
+  }
+  if (error instanceof OpenAI.APIUserAbortError) {
+    return true;
+  }
+  const err = error as any;
+  if (
+    err.name === 'APIUserAbortError' ||
+    err.name === 'AbortError' ||
+    err.name === 'CancellationError'
+  ) {
+    return true;
+  }
+  if (err.code === 'ERR_CANCELED' || err.type === 'aborted') {
+    return true;
+  }
+  if (
+    typeof err.message === 'string' &&
+    /Request was aborted|aborted|cancelled|canceled/i.test(err.message)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function looksLikeNonOpenAICompatibleEndpoint(url: string): boolean {

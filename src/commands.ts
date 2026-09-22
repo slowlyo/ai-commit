@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { generateCommitMsg } from './generate-commit-msg';
 import { ConfigurationManager, ModelProfile } from './config';
 import { logError } from './output';
+import { isAbortError } from './openai-utils';
 import { t } from './i18n';
 
 interface ProfileQuickPickItem extends vscode.QuickPickItem {
@@ -232,6 +233,13 @@ export class CommandManager {
       try {
         await handler(...args);
       } catch (error) {
+        if (
+          error instanceof vscode.CancellationError ||
+          (error as any)?.name === 'CancellationError' ||
+          isAbortError(error)
+        ) {
+          return;
+        }
         logError(error, `命令执行失败：${command}`);
         const errorMessage = error instanceof Error ? error.message : String(error);
         const result = await vscode.window.showErrorMessage(

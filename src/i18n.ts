@@ -48,7 +48,10 @@ const messages = {
       'Please make sure ai-commit.OPENAI_BASE_URL ends at /v1 and does not include /chat/completions. Current value: {baseUrl}',
     'message.configureApiKey':
       'OpenAI-compatible API Key not configured. Would you like to configure it now?',
+    'message.generationCancelled': 'Commit message generation cancelled.',
     'message.modelUpdated': 'Model updated to "{model}" for profile "{profile}"',
+    'info.diffTruncated':
+      'Git diff length ({length} chars) exceeded limit ({limit} chars). Truncated safely to optimize generation speed.',
     'placeholder.searchOrSelectModel':
       'Search or select a model, or press Enter to use custom model',
     'placeholder.selectModel': 'Please select a model',
@@ -124,7 +127,10 @@ const messages = {
     'hint.openaiBaseUrlCurrent':
       '请确保 ai-commit.OPENAI_BASE_URL 填写到 /v1，不要填写 /chat/completions。当前为：{baseUrl}',
     'message.configureApiKey': '未配置 OpenAI 兼容接口 API Key，是否现在配置？',
+    'message.generationCancelled': '已取消生成提交信息',
     'message.modelUpdated': '配置档案“{profile}”的模型已更新为“{model}”',
+    'info.diffTruncated':
+      'Git diff 长度（{length} 字符）超出限制（{limit} 字符），已进行安全截断以提升生成速度。',
     'placeholder.searchOrSelectModel': '搜索或选择模型，或按回车输入自定义模型',
     'placeholder.selectModel': '请选择模型',
     'placeholder.selectModelWithProfile': '为配置档案“{profile}”选择模型',
