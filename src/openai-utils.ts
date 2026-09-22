@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources';
-import { ConfigKeys, ConfigurationManager } from './config';
+import { ConfigurationManager, ModelProfile } from './config';
 import { t } from './i18n';
 
 type ExtraBody = Record<string, unknown>;
@@ -66,16 +66,22 @@ function getOpenAIExtraBody(rawValue: string | undefined): ExtraBody {
 
 /**
  * 创建 OpenAI 兼容接口配置。
+ * @param {ModelProfile} [profile] - 可选指定的配置档案，默认使用当前生效档案。
  * @returns {Object} OpenAI 兼容接口配置。
  * @throws {Error} 缺少 API Key 时抛出错误。
  */
-function getOpenAIConfig() {
+function getOpenAIConfig(profile?: ModelProfile) {
   const configManager = ConfigurationManager.getInstance();
-  const apiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
-  const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
+  const effectiveProfile = profile ?? configManager.getActiveProfile();
+  const apiKey = effectiveProfile.apiKey;
+  const baseURL = effectiveProfile.baseUrl;
 
   if (!apiKey) {
-    throw new Error(t('error.apiKeyMissingConfig'));
+    throw new Error(
+      effectiveProfile.name
+        ? t('error.apiKeyMissingProfile', { profile: effectiveProfile.name })
+        : t('error.apiKeyMissingConfig')
+    );
   }
 
   const config: {
@@ -101,10 +107,11 @@ function getOpenAIConfig() {
 
 /**
  * 创建 OpenAI 兼容接口实例。
+ * @param {ModelProfile} [profile] - 可选指定的配置档案。
  * @returns {OpenAI} OpenAI 兼容接口实例。
  */
-export function createOpenAIApi() {
-  const config = getOpenAIConfig();
+export function createOpenAIApi(profile?: ModelProfile) {
+  const config = getOpenAIConfig(profile);
   return new OpenAI(config);
 }
 
@@ -114,17 +121,13 @@ export function createOpenAIApi() {
  * @returns {Promise<string>} 模型返回内容。
  */
 export async function OpenAICompatibleAPI(messages: ChatCompletionMessageParam[]) {
-  const openai = createOpenAIApi();
   const configManager = ConfigurationManager.getInstance();
-  const model = configManager.getConfig<string>(ConfigKeys.OPENAI_MODEL);
-  const temperature = configManager.getConfig<number>(
-    ConfigKeys.OPENAI_TEMPERATURE,
-    0.7
-  );
-  const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
-  const extraBody = getOpenAIExtraBody(
-    configManager.getConfig<string>(ConfigKeys.OPENAI_EXTRA_BODY, '')
-  );
+  const profile = configManager.getActiveProfile();
+  const openai = createOpenAIApi(profile);
+  const model = profile.model || 'gpt-5-mini';
+  const temperature = profile.temperature ?? 0.7;
+  const baseURL = profile.baseUrl;
+  const extraBody = getOpenAIExtraBody(profile.extraBody);
 
   const completion = await openai.chat.completions.create({
     model,

@@ -13,6 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
   try {
     initOutputChannel(context);
     const configManager = ConfigurationManager.getInstance(context);
+    await configManager.ensureProfilesInitialized();
 
     const commandManager = new CommandManager(context);
     commandManager.registerCommands();
@@ -24,7 +25,8 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     });
 
-    const apiKey = configManager.getConfig<string>('OPENAI_API_KEY');
+    const activeProfile = configManager.getActiveProfile();
+    const apiKey = activeProfile.apiKey;
     if (!apiKey) {
       const result = await vscode.window.showWarningMessage(
         t('message.configureApiKey'),

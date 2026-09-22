@@ -36,6 +36,10 @@
       {
         "command": "ai-commit.showAvailableModels",
         "title": "%aiCommit.command.showAvailableModels.title%"
+      },
+      {
+        "command": "ai-commit.selectProfile",
+        "title": "%aiCommit.command.selectProfile.title%"
       }
     ],
     "configuration": [
@@ -171,6 +175,60 @@
       {
         "title": "%aiCommit.configuration.openai.title%",
         "properties": {
+          "ai-commit.ACTIVE_PROFILE_ID": {
+            "type": "string",
+            "default": "default",
+            "description": "%aiCommit.config.activeProfileId.description%",
+            "markdownDescription": "%aiCommit.config.activeProfileId.markdownDescription%"
+          },
+          "ai-commit.PROFILES": {
+            "type": "array",
+            "default": [],
+            "description": "%aiCommit.config.profiles.description%",
+            "markdownDescription": "%aiCommit.config.profiles.markdownDescription%",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "apiKey",
+                "baseUrl",
+                "model"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "%aiCommit.config.profiles.item.id%"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "%aiCommit.config.profiles.item.name%"
+                },
+                "apiKey": {
+                  "type": "string",
+                  "description": "%aiCommit.config.profiles.item.apiKey%"
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "description": "%aiCommit.config.profiles.item.baseUrl%"
+                },
+                "model": {
+                  "type": "string",
+                  "description": "%aiCommit.config.profiles.item.model%"
+                },
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "description": "%aiCommit.config.profiles.item.temperature%"
+                },
+                "extraBody": {
+                  "type": "string",
+                  "description": "%aiCommit.config.profiles.item.extraBody%"
+                }
+              }
+            }
+          },
           "ai-commit.OPENAI_API_KEY": {
             "default": "",
             "description": "%aiCommit.config.openaiApiKey.description%",
@@ -184,6 +242,7 @@
           "ai-commit.OPENAI_MODEL": {
             "default": "gpt-5-mini",
             "description": "%aiCommit.config.openaiModel.description%",
+            "markdownDescription": "%aiCommit.config.openaiModel.markdownDescription%",
             "type": "string"
           },
           "ai-commit.OPENAI_TEMPERATURE": {

@@ -251,12 +251,17 @@ export async function generateCommitMsg(arg) {
           : t('progress.generatingCommitMessage')
       });
       try {
-        const openaiApiKey = configManager.getConfig<string>(ConfigKeys.OPENAI_API_KEY);
+        const activeProfile = configManager.getActiveProfile();
+        const openaiApiKey = activeProfile.apiKey;
         if (!openaiApiKey) {
-          throw new Error(t('error.apiKeyMissing'));
+          throw new Error(
+            t('error.apiKeyMissingProfile', { profile: activeProfile.name })
+          );
         }
 
-        const baseURL = configManager.getConfig<string>(ConfigKeys.OPENAI_BASE_URL);
+        const baseURL = activeProfile.baseUrl;
+        logInfo(`Active Profile: ${activeProfile.name} (${activeProfile.id})`);
+        logInfo(`Model: ${activeProfile.model}`);
         logInfo(
           `OpenAI Compatible Request URL: ${getOpenAIChatCompletionsRequestUrl(baseURL)}`
         );
