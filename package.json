@@ -2,7 +2,7 @@
   "name": "slowlyo-ai-commit",
   "displayName": "Commit Message AI",
   "description": "使用 OpenAI (兼容) 应用程序接口审核代码版本管理变更内容，生成符合规范的标准化提交信息，简化提交流程，统一代码提交规范。",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "engines": {
     "node": ">=16",
     "vscode": "^1.77.0"
